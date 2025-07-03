@@ -7,6 +7,9 @@ let usuarioLogado = null;
 let proximoNumeroOS = 1;
 let proximoIdProduto = 1;
 let pecasOSAtual = [];
+let osAtualEdicao = null;
+let pecasOSEdicao = [];
+
 
 // Inicialização do sistema
 document.addEventListener('DOMContentLoaded', function() {
@@ -848,9 +851,6 @@ mostrarAlerta('Produto cadastrado e adicionado à OS!', 'success');
 
 
 // ===== FUNÇÕES PARA EDIÇÃO DE OS COM PRODUTOS =====
-
-let pecasOSEdicao = [];
-let osAtualEdicao = null;
 
 // Configurar eventos para edição de peças
 function configurarEventosEdicaoPecas() {
