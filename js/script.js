@@ -11,6 +11,7 @@ let osAtualEdicao = null;
 let pecasOSEdicao = [];
 
 
+
 // Inicialização do sistema
 document.addEventListener('DOMContentLoaded', function() {
     carregarDados();
@@ -850,6 +851,238 @@ mostrarAlerta('Produto cadastrado e adicionado à OS!', 'success');
 }
 
 
+// ===== FUNÇÕES PARA GERENCIAMENTO DE PEÇAS/SERVIÇOS =====
+
+// Configurar eventos relacionados a peças/serviços
+function configurarEventosPecas() {
+    // Evento de busca de peças
+    const buscaPeca = document.getElementById('buscaPeca');
+    if (buscaPeca) {
+        buscaPeca.addEventListener('input', function() {
+            buscarPecasServicos(this.value);
+        });
+
+        buscaPeca.addEventListener('blur', function() {
+            setTimeout(() => {
+                document.getElementById('sugestoesPecas').style.display = 'none';
+            }, 200);
+        });
+    }
+
+    // Evento para calcular total quando custo do serviço mudar
+    const custoServico = document.getElementById('custoServico');
+    if (custoServico) {
+        custoServico.addEventListener('input', calcularTotalGeral);
+    }
+
+    // Eventos para o modal de seleção de peça
+    const quantidadePeca = document.getElementById('quantidadePeca');
+    const valorUnitarioPeca = document.getElementById('valorUnitarioPeca');
+    
+    if (quantidadePeca) {
+        quantidadePeca.addEventListener('input', calcularTotalPeca);
+    }
+    
+    if (valorUnitarioPeca) {
+        valorUnitarioPeca.addEventListener('input', calcularTotalPeca);
+    }
+}
+
+// Buscar peças/serviços
+function buscarPecasServicos(termo) {
+    if (termo.length < 2) {
+        document.getElementById('sugestoesPecas').style.display = 'none';
+        return;
+    }
+
+    const sugestoes = document.getElementById('sugestoesPecas');
+    sugestoes.innerHTML = '';
+
+    // Buscar em produtos cadastrados
+    const produtosFiltrados = produtosServicos.filter(produto => 
+        produto.descricao.toLowerCase().includes(termo.toLowerCase())
+    );
+
+    // Buscar em peças já utilizadas em outras OS
+    const pecasUtilizadas = [];
+    ordemServicos.forEach(os => {
+        if (os.pecasServicos) {
+            os.pecasServicos.forEach(peca => {
+                if (peca.descricao.toLowerCase().includes(termo.toLowerCase())) {
+                    const existe = pecasUtilizadas.find(p => p.descricao === peca.descricao);
+                    if (!existe) {
+                        pecasUtilizadas.push({
+                            id: 'usado_' + Date.now(),
+                            descricao: peca.descricao,
+                            valorUnitario: peca.valorUnitario,
+                            tipo: 'usado'
+                        });
+                    }
+                }
+            });
+        }
+    });
+
+    // Combinar resultados
+    const todosProdutos = [...produtosFiltrados, ...pecasUtilizadas];
+
+    if (todosProdutos.length > 0) {
+        todosProdutos.forEach(produto => {
+            const item = document.createElement('a');
+            item.className = 'list-group-item list-group-item-action';
+            item.innerHTML = `
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">${produto.descricao}</h6>
+                    <small>R$ ${produto.valorUnitario.toFixed(2)}</small>
+                </div>
+                <small class="text-muted">${produto.tipo === 'usado' ? 'Usado anteriormente' : produto.tipo}</small>
+            `;
+            item.onclick = () => selecionarPeca(produto);
+            sugestoes.appendChild(item);
+        });
+        sugestoes.style.display = 'block';
+    } else {
+        sugestoes.style.display = 'none';
+    }
+}
+
+// Selecionar peça para adicionar à OS
+function selecionarPeca(produto) {
+    document.getElementById('idProdutoSelecionado').value = produto.id;
+    document.getElementById('descricaoSelecionada').value = produto.descricao;
+    document.getElementById('valorUnitarioPeca').value = produto.valorUnitario;
+    document.getElementById('quantidadePeca').value = 1;
+    calcularTotalPeca();
+
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('selecionarPecaModal'));
+    modal.show();
+
+    // Limpar busca
+    document.getElementById('buscaPeca').value = '';
+    document.getElementById('sugestoesPecas').style.display = 'none';
+}
+
+// Calcular total da peça no modal
+function calcularTotalPeca() {
+    const quantidade = parseFloat(document.getElementById('quantidadePeca').value) || 0;
+    const valorUnitario = parseFloat(document.getElementById('valorUnitarioPeca').value) || 0;
+    const total = quantidade * valorUnitario;
+    document.getElementById('totalPeca').value = `R$ ${total.toFixed(2)}`;
+}
+
+// Adicionar peça à OS
+function adicionarPecaOS() {
+    const descricao = document.getElementById('descricaoSelecionada').value;
+    const quantidade = parseFloat(document.getElementById('quantidadePeca').value);
+    const valorUnitario = parseFloat(document.getElementById('valorUnitarioPeca').value);
+
+    if (!descricao || quantidade <= 0 || valorUnitario < 0) {
+        mostrarAlerta('Preencha todos os campos corretamente!', 'warning');
+        return;
+    }
+
+    const peca = {
+        id: Date.now(),
+        descricao: descricao,
+        quantidade: quantidade,
+        valorUnitario: valorUnitario,
+        total: quantidade * valorUnitario
+    };
+
+    pecasOSAtual.push(peca);
+    atualizarTabelaPecasOS();
+    calcularTotalGeral();
+
+    // Fechar modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('selecionarPecaModal'));
+    modal.hide();
+
+    mostrarAlerta('Peça/serviço adicionado com sucesso!', 'success');
+}
+
+// Atualizar tabela de peças da OS
+function atualizarTabelaPecasOS() {
+    const tbody = document.getElementById('tabelaPecasOS');
+    tbody.innerHTML = '';
+
+    pecasOSAtual.forEach((peca, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${peca.descricao}</td>
+            <td>${peca.quantidade}</td>
+            <td>R$ ${peca.valorUnitario.toFixed(2)}</td>
+            <td>R$ ${peca.total.toFixed(2)}</td>
+            <td>
+                <button class="btn btn-sm btn-danger" onclick="removerPecaOS(${index})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Remover peça da OS
+function removerPecaOS(index) {
+    pecasOSAtual.splice(index, 1);
+    atualizarTabelaPecasOS();
+    calcularTotalGeral();
+    mostrarAlerta('Peça/serviço removido!', 'info');
+}
+
+// Calcular total geral da OS
+function calcularTotalGeral() {
+    const custoServico = parseFloat(document.getElementById('custoServico').value) || 0;
+    const totalPecas = pecasOSAtual.reduce((total, peca) => total + peca.total, 0);
+    const totalGeral = custoServico + totalPecas;
+    
+    document.getElementById('totalGeral').value = `R$ ${totalGeral.toFixed(2)}`;
+}
+
+// Abrir modal para novo produto
+function abrirModalNovoProduto() {
+    document.getElementById('novoProdutoForm').reset();
+    const modal = new bootstrap.Modal(document.getElementById('novoProdutoModal'));
+    modal.show();
+}
+
+// Salvar novo produto/serviço
+function salvarNovoProduto() {
+    const descricao = document.getElementById('descricaoProduto').value;
+    const tipo = document.getElementById('tipoProduto').value;
+    const valor = parseFloat(document.getElementById('valorProduto').value);
+    const observacoes = document.getElementById('observacoesProduto').value;
+
+    if (!descricao || valor < 0) {
+        mostrarAlerta('Preencha todos os campos obrigatórios!', 'warning');
+        return;
+    }
+
+    const produto = {
+        id: proximoIdProduto++,
+        descricao: descricao,
+        tipo: tipo,
+        valorUnitario: valor,
+        observacoes: observacoes,
+        dataCadastro: new Date().toISOString(),
+        usuarioCadastro: usuarioLogado.nome
+    };
+
+    produtosServicos.push(produto);
+    salvarDados();
+
+    // Fechar modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('novoProdutoModal'));
+    modal.hide();
+
+    mostrarAlerta(`${tipo === 'peca' ? 'Peça' : 'Serviço'} cadastrado com sucesso!`, 'success');
+
+    // Adicionar automaticamente à OS se desejar
+    selecionarPeca(produto);
+}
+
+
 // ===== FUNÇÕES PARA EDIÇÃO DE OS COM PRODUTOS =====
 
 // Configurar eventos para edição de peças
@@ -1044,6 +1277,8 @@ function adicionarPecaOSOriginal() {
 
 // Substituir a função original
 window.adicionarPecaOS = adicionarPecaOSOriginal;
+
+
 
 
 // Função para enviar OS por WhatsApp
