@@ -831,7 +831,19 @@ function salvarNovoProduto() {
     mostrarAlerta(`${tipo === 'peca' ? 'Peça' : 'Serviço'} cadastrado com sucesso!`, 'success');
 
     // Adicionar automaticamente à OS se desejar
-    selecionarPeca(produto);
+    const peca = {
+    id: produto.id,
+    descricao: produto.descricao,
+    quantidade: 1,
+    valorUnitario: produto.valorUnitario,
+    total: produto.valorUnitario * 1
+};
+
+pecasOSAtual.push(peca);
+atualizarTabelaPecasOS();
+calcularTotalGeral();
+
+mostrarAlerta('Produto cadastrado e adicionado à OS!', 'success');
 }
 
 
