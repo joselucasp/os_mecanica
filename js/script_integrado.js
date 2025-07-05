@@ -10,14 +10,13 @@ let pecasOSAtual = [];
 let osAtualEdicao = null;
 let pecasOSEdicao = [];
 
-
-
 // Inicialização do sistema
 document.addEventListener('DOMContentLoaded', function() {
     carregarDados();
     verificarLogin();
     configurarEventos();
     configurarEventosPecas();
+    configurarEventosEdicaoPecas();
     atualizarEstatisticas();
     // Garante que a seção de Lançar OS seja exibida por padrão ao carregar a página
     showSection("lancar-os");
@@ -47,6 +46,12 @@ function configurarEventos() {
     document.getElementById('editarOSForm').addEventListener('submit', function(e) {
         e.preventDefault();
         salvarEdicaoOS();
+    });
+
+    // Formulário de novo produto
+    document.getElementById('novoProdutoForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        salvarNovoProduto();
     });
 }
 
@@ -178,10 +183,10 @@ function adicionarOS() {
 // Limpar formulário
 function limparFormulario() {
     document.getElementById('osForm').reset();
-    document.getElementById('status').value = 'orcamento';
+    document.getElementById('status').value = 'Orcamento';
     document.getElementById('prioridade').value = 'media';
     document.getElementById('custoServico').value = '0';
-    document.getElementById('totalGeral').value = '0,00';
+    document.getElementById('totalGeral').value = 'R$ 0,00';
     pecasOSAtual = [];
     atualizarTabelaPecasOS();
     calcularTotalGeral();
@@ -290,7 +295,8 @@ function editarOS(numero) {
     osAtualEdicao = os;
     
     // Preencher formulário de edição
-    document.getElementById('editarOSId').value = os.numero;
+    document.getElementById('editarOSId').textContent = os.numero;
+    document.getElementById('editarOSIdHidden').value = os.numero;
     document.getElementById('editarCliente').value = os.cliente;
     document.getElementById('editarTelefone').value = os.telefone || '';
     document.getElementById('editarVeiculo').value = os.veiculo;
@@ -320,7 +326,7 @@ function salvarEdicaoOS() {
         return;
     }
 
-    const numero = parseInt(document.getElementById('editarOSId').value);
+    const numero = parseInt(document.getElementById('editarOSIdHidden').value);
     const os = ordemServicos.find(o => o.numero === numero);
     if (!os) return;
 
@@ -452,7 +458,7 @@ function adicionarUsuario() {
 
     const nome = document.getElementById('nomeUsuarioNovo').value;
     const senha = document.getElementById('senhaUsuarioNovo').value;
-    const perfil = document.getElementById('perfilUsuario').value;
+    const perfil = document.getElementById('perfilUsuarioNovo').value;
 
     // Verificar se usuário já existe
     if (usuarios.find(u => u.nome === nome)) {
@@ -538,9 +544,15 @@ function showSection(sectionId) {
 // Atualizar estatísticas
 function atualizarEstatisticas() {
     document.getElementById('totalOS').textContent = ordemServicos.length;
-    document.getElementById('Orcamento').textContent = ordemServicos.filter(os => os.status === 'orcamento').length;
+    document.getElementById('Orcamento').textContent = ordemServicos.filter(os => os.status === 'Orcamento').length;
     document.getElementById('osAndamento').textContent = ordemServicos.filter(os => os.status === 'em_andamento').length;
     document.getElementById('osConcluidas').textContent = ordemServicos.filter(os => os.status === 'concluida').length;
+    
+    // Se a seção financeiro estiver visível, atualizar o gráfico
+    const financeiroSection = document.getElementById('financeiro');
+    if (financeiroSection && financeiroSection.style.display !== 'none') {
+        atualizarGraficoGanhos();
+    }
 }
 
 // Salvar movimentação em arquivo TXT
@@ -564,9 +576,9 @@ function formatarDataHora(dataISO) {
 
 function formatarStatus(status) {
     const statusMap = {
-        'orcamento': 'orcamento',
-        'ordem_servico': 'ordem_servico',
-        'em_andamento' : 'em_andamento',
+        'Orcamento': 'Orçamento',
+        'Ordem_de_servico': 'Ordem de Serviço',
+        'em_andamento': 'Em Andamento',
         'concluida': 'Concluída',
         'cancelada': 'Cancelada'
     };
@@ -605,8 +617,6 @@ function mostrarAlerta(mensagem, tipo) {
     }, 5000);
 }
 
-
-
 // ===== FUNÇÕES PARA GERENCIAMENTO DE PEÇAS/SERVIÇOS =====
 
 // Configurar eventos relacionados a peças/serviços
@@ -746,257 +756,24 @@ function adicionarPecaOS() {
         total: quantidade * valorUnitario
     };
 
-    pecasOSAtual.push(peca);
-    atualizarTabelaPecasOS();
-    calcularTotalGeral();
+    // Verificar se estamos em modo edição
+    const modal = document.getElementById('selecionarPecaModal');
+    const modoEdicao = modal.getAttribute('data-modo') === 'edicao';
 
-    // Fechar modal
-    const modal = bootstrap.Modal.getInstance(document.getElementById('selecionarPecaModal'));
-    modal.hide();
-
-    mostrarAlerta('Peça/serviço adicionado com sucesso!', 'success');
-}
-
-// Atualizar tabela de peças da OS
-function atualizarTabelaPecasOS() {
-    const tbody = document.getElementById('tabelaPecasOS');
-    tbody.innerHTML = '';
-
-    pecasOSAtual.forEach((peca, index) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${peca.descricao}</td>
-            <td>${peca.quantidade}</td>
-            <td>R$ ${peca.valorUnitario.toFixed(2)}</td>
-            <td>R$ ${peca.total.toFixed(2)}</td>
-            <td>
-                <button class="btn btn-sm btn-danger" onclick="removerPecaOS(${index})">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-// Remover peça da OS
-function removerPecaOS(index) {
-    pecasOSAtual.splice(index, 1);
-    atualizarTabelaPecasOS();
-    calcularTotalGeral();
-    mostrarAlerta('Peça/serviço removido!', 'info');
-}
-
-// Calcular total geral da OS
-function calcularTotalGeral() {
-    const custoServico = parseFloat(document.getElementById('custoServico').value) || 0;
-    const totalPecas = pecasOSAtual.reduce((total, peca) => total + peca.total, 0);
-    const totalGeral = custoServico + totalPecas;
-    
-    document.getElementById('totalGeral').value = `R$ ${totalGeral.toFixed(2)}`;
-}
-
-// Abrir modal para novo produto
-function abrirModalNovoProduto() {
-    document.getElementById('novoProdutoForm').reset();
-    const modal = new bootstrap.Modal(document.getElementById('novoProdutoModal'));
-    modal.show();
-}
-
-// Salvar novo produto/serviço
-function salvarNovoProduto() {
-    const descricao = document.getElementById('descricaoProduto').value;
-    const tipo = document.getElementById('tipoProduto').value;
-    const valor = parseFloat(document.getElementById('valorProduto').value);
-    const observacoes = document.getElementById('observacoesProduto').value;
-
-    if (!descricao || valor < 0) {
-        mostrarAlerta('Preencha todos os campos obrigatórios!', 'warning');
-        return;
-    }
-
-    const produto = {
-        id: proximoIdProduto++,
-        descricao: descricao,
-        tipo: tipo,
-        valorUnitario: valor,
-        observacoes: observacoes,
-        dataCadastro: new Date().toISOString(),
-        usuarioCadastro: usuarioLogado.nome
-    };
-
-    produtosServicos.push(produto);
-    salvarDados();
-
-    // Fechar modal
-    const modal = bootstrap.Modal.getInstance(document.getElementById('novoProdutoModal'));
-    modal.hide();
-
-    mostrarAlerta(`${tipo === 'peca' ? 'Peça' : 'Serviço'} cadastrado com sucesso!`, 'success');
-
-    // Adicionar automaticamente à OS se desejar
-    const peca = {
-    id: produto.id,
-    descricao: produto.descricao,
-    quantidade: 1,
-    valorUnitario: produto.valorUnitario,
-    total: produto.valorUnitario * 1
-};
-
-pecasOSAtual.push(peca);
-atualizarTabelaPecasOS();
-calcularTotalGeral();
-
-mostrarAlerta('Produto cadastrado e adicionado à OS!', 'success');
-}
-
-
-// ===== FUNÇÕES PARA GERENCIAMENTO DE PEÇAS/SERVIÇOS =====
-
-// Configurar eventos relacionados a peças/serviços
-function configurarEventosPecas() {
-    // Evento de busca de peças
-    const buscaPeca = document.getElementById('buscaPeca');
-    if (buscaPeca) {
-        buscaPeca.addEventListener('input', function() {
-            buscarPecasServicos(this.value);
-        });
-
-        buscaPeca.addEventListener('blur', function() {
-            setTimeout(() => {
-                document.getElementById('sugestoesPecas').style.display = 'none';
-            }, 200);
-        });
-    }
-
-    // Evento para calcular total quando custo do serviço mudar
-    const custoServico = document.getElementById('custoServico');
-    if (custoServico) {
-        custoServico.addEventListener('input', calcularTotalGeral);
-    }
-
-    // Eventos para o modal de seleção de peça
-    const quantidadePeca = document.getElementById('quantidadePeca');
-    const valorUnitarioPeca = document.getElementById('valorUnitarioPeca');
-    
-    if (quantidadePeca) {
-        quantidadePeca.addEventListener('input', calcularTotalPeca);
-    }
-    
-    if (valorUnitarioPeca) {
-        valorUnitarioPeca.addEventListener('input', calcularTotalPeca);
-    }
-}
-
-// Buscar peças/serviços
-function buscarPecasServicos(termo) {
-    if (termo.length < 2) {
-        document.getElementById('sugestoesPecas').style.display = 'none';
-        return;
-    }
-
-    const sugestoes = document.getElementById('sugestoesPecas');
-    sugestoes.innerHTML = '';
-
-    // Buscar em produtos cadastrados
-    const produtosFiltrados = produtosServicos.filter(produto => 
-        produto.descricao.toLowerCase().includes(termo.toLowerCase())
-    );
-
-    // Buscar em peças já utilizadas em outras OS
-    const pecasUtilizadas = [];
-    ordemServicos.forEach(os => {
-        if (os.pecasServicos) {
-            os.pecasServicos.forEach(peca => {
-                if (peca.descricao.toLowerCase().includes(termo.toLowerCase())) {
-                    const existe = pecasUtilizadas.find(p => p.descricao === peca.descricao);
-                    if (!existe) {
-                        pecasUtilizadas.push({
-                            id: 'usado_' + Date.now(),
-                            descricao: peca.descricao,
-                            valorUnitario: peca.valorUnitario,
-                            tipo: 'usado'
-                        });
-                    }
-                }
-            });
-        }
-    });
-
-    // Combinar resultados
-    const todosProdutos = [...produtosFiltrados, ...pecasUtilizadas];
-
-    if (todosProdutos.length > 0) {
-        todosProdutos.forEach(produto => {
-            const item = document.createElement('a');
-            item.className = 'list-group-item list-group-item-action';
-            item.innerHTML = `
-                <div class="d-flex w-100 justify-content-between">
-                    <h6 class="mb-1">${produto.descricao}</h6>
-                    <small>R$ ${produto.valorUnitario.toFixed(2)}</small>
-                </div>
-                <small class="text-muted">${produto.tipo === 'usado' ? 'Usado anteriormente' : produto.tipo}</small>
-            `;
-            item.onclick = () => selecionarPeca(produto);
-            sugestoes.appendChild(item);
-        });
-        sugestoes.style.display = 'block';
+    if (modoEdicao) {
+        pecasOSEdicao.push(peca);
+        atualizarTabelaPecasOSEdicao();
+        calcularTotalGeralEdicao();
+        modal.removeAttribute('data-modo');
     } else {
-        sugestoes.style.display = 'none';
+        pecasOSAtual.push(peca);
+        atualizarTabelaPecasOS();
+        calcularTotalGeral();
     }
-}
-
-// Selecionar peça para adicionar à OS
-function selecionarPeca(produto) {
-    document.getElementById('idProdutoSelecionado').value = produto.id;
-    document.getElementById('descricaoSelecionada').value = produto.descricao;
-    document.getElementById('valorUnitarioPeca').value = produto.valorUnitario;
-    document.getElementById('quantidadePeca').value = 1;
-    calcularTotalPeca();
-
-    // Mostrar modal
-    const modal = new bootstrap.Modal(document.getElementById('selecionarPecaModal'));
-    modal.show();
-
-    // Limpar busca
-    document.getElementById('buscaPeca').value = '';
-    document.getElementById('sugestoesPecas').style.display = 'none';
-}
-
-// Calcular total da peça no modal
-function calcularTotalPeca() {
-    const quantidade = parseFloat(document.getElementById('quantidadePeca').value) || 0;
-    const valorUnitario = parseFloat(document.getElementById('valorUnitarioPeca').value) || 0;
-    const total = quantidade * valorUnitario;
-    document.getElementById('totalPeca').value = `R$ ${total.toFixed(2)}`;
-}
-
-// Adicionar peça à OS
-function adicionarPecaOS() {
-    const descricao = document.getElementById('descricaoSelecionada').value;
-    const quantidade = parseFloat(document.getElementById('quantidadePeca').value);
-    const valorUnitario = parseFloat(document.getElementById('valorUnitarioPeca').value);
-
-    if (!descricao || quantidade <= 0 || valorUnitario < 0) {
-        mostrarAlerta('Preencha todos os campos corretamente!', 'warning');
-        return;
-    }
-
-    const peca = {
-        id: Date.now(),
-        descricao: descricao,
-        quantidade: quantidade,
-        valorUnitario: valorUnitario,
-        total: quantidade * valorUnitario
-    };
-
-    pecasOSAtual.push(peca);
-    atualizarTabelaPecasOS();
-    calcularTotalGeral();
 
     // Fechar modal
-    const modal = bootstrap.Modal.getInstance(document.getElementById('selecionarPecaModal'));
-    modal.hide();
+    const modalInstance = bootstrap.Modal.getInstance(modal);
+    modalInstance.hide();
 
     mostrarAlerta('Peça/serviço adicionado com sucesso!', 'success');
 }
@@ -1054,7 +831,7 @@ function salvarNovoProduto() {
     const valor = parseFloat(document.getElementById('valorProduto').value);
     const observacoes = document.getElementById('observacoesProduto').value;
 
-    if (!descricao || valor < 0) {
+    if (!descricao || !tipo || valor < 0) {
         mostrarAlerta('Preencha todos os campos obrigatórios!', 'warning');
         return;
     }
@@ -1078,17 +855,25 @@ function salvarNovoProduto() {
 
     mostrarAlerta(`${tipo === 'peca' ? 'Peça' : 'Serviço'} cadastrado com sucesso!`, 'success');
 
-    // Adicionar automaticamente à OS se desejar
-    selecionarPeca(produto);
+    // Verificar se estamos em modo edição
+    const novoProdutoModal = document.getElementById('novoProdutoModal');
+    const modoEdicao = novoProdutoModal.getAttribute('data-modo') === 'edicao';
+    
+    if (modoEdicao) {
+        novoProdutoModal.removeAttribute('data-modo');
+        selecionarPecaEdicao(produto);
+    } else {
+        // Adicionar automaticamente à OS
+        selecionarPeca(produto);
+    }
 }
-
 
 // ===== FUNÇÕES PARA EDIÇÃO DE OS COM PRODUTOS =====
 
 // Configurar eventos para edição de peças
 function configurarEventosEdicaoPecas() {
     // Evento de busca de peças na edição
-    const editarBuscaPeca = document.getElementById('editarBuscaPeca');
+    const editarBuscaPeca = document.getElementById('buscaPecaEdicao');
     if (editarBuscaPeca) {
         editarBuscaPeca.addEventListener('input', function() {
             buscarPecasServicosEdicao(this.value);
@@ -1096,7 +881,7 @@ function configurarEventosEdicaoPecas() {
 
         editarBuscaPeca.addEventListener('blur', function() {
             setTimeout(() => {
-                document.getElementById('editarSugestoesPecas').style.display = 'none';
+                document.getElementById('sugestoesPecasEdicao').style.display = 'none';
             }, 200);
         });
     }
@@ -1111,11 +896,11 @@ function configurarEventosEdicaoPecas() {
 // Buscar peças/serviços na edição
 function buscarPecasServicosEdicao(termo) {
     if (termo.length < 2) {
-        document.getElementById('editarSugestoesPecas').style.display = 'none';
+        document.getElementById('sugestoesPecasEdicao').style.display = 'none';
         return;
     }
 
-    const sugestoes = document.getElementById('editarSugestoesPecas');
+    const sugestoes = document.getElementById('sugestoesPecasEdicao');
     sugestoes.innerHTML = '';
 
     // Buscar em produtos cadastrados
@@ -1179,8 +964,8 @@ function selecionarPecaEdicao(produto) {
     modal.show();
 
     // Limpar busca
-    document.getElementById('editarBuscaPeca').value = '';
-    document.getElementById('editarSugestoesPecas').style.display = 'none';
+    document.getElementById('buscaPecaEdicao').value = '';
+    document.getElementById('sugestoesPecasEdicao').style.display = 'none';
     
     // Definir que estamos em modo edição
     document.getElementById('selecionarPecaModal').setAttribute('data-modo', 'edicao');
@@ -1188,7 +973,7 @@ function selecionarPecaEdicao(produto) {
 
 // Atualizar tabela de peças da OS na edição
 function atualizarTabelaPecasOSEdicao() {
-    const tbody = document.getElementById('editarTabelaPecasOS');
+    const tbody = document.getElementById('tabelaPecasOSEdicao');
     tbody.innerHTML = '';
 
     pecasOSEdicao.forEach((peca, index) => {
@@ -1235,51 +1020,7 @@ function abrirModalNovoProdutoEdicao() {
     document.getElementById('novoProdutoModal').setAttribute('data-modo', 'edicao');
 }
 
-// Modificar a função adicionarPecaOS para suportar edição
-function adicionarPecaOSOriginal() {
-    const descricao = document.getElementById('descricaoSelecionada').value;
-    const quantidade = parseFloat(document.getElementById('quantidadePeca').value);
-    const valorUnitario = parseFloat(document.getElementById('valorUnitarioPeca').value);
-
-    if (!descricao || quantidade <= 0 || valorUnitario < 0) {
-        mostrarAlerta('Preencha todos os campos corretamente!', 'warning');
-        return;
-    }
-
-    const peca = {
-        id: Date.now(),
-        descricao: descricao,
-        quantidade: quantidade,
-        valorUnitario: valorUnitario,
-        total: quantidade * valorUnitario
-    };
-
-    // Verificar se estamos em modo edição
-    const modal = document.getElementById('selecionarPecaModal');
-    const modoEdicao = modal.getAttribute('data-modo') === 'edicao';
-
-    if (modoEdicao) {
-        pecasOSEdicao.push(peca);
-        atualizarTabelaPecasOSEdicao();
-        calcularTotalGeralEdicao();
-    } else {
-        pecasOSAtual.push(peca);
-        atualizarTabelaPecasOS();
-        calcularTotalGeral();
-    }
-
-    // Fechar modal
-    const modalInstance = bootstrap.Modal.getInstance(modal);
-    modalInstance.hide();
-
-    mostrarAlerta('Peça/serviço adicionado com sucesso!', 'success');
-}
-
-// Substituir a função original
-window.adicionarPecaOS = adicionarPecaOSOriginal;
-
-
-
+// ===== FUNÇÕES DE ENVIO =====
 
 // Função para enviar OS por WhatsApp
 function enviarWhatsApp(numero) {
@@ -1291,7 +1032,7 @@ function enviarWhatsApp(numero) {
 
     // Gerar mensagem formatada para WhatsApp
     let mensagem = `*ORDEM DE SERVIÇO #${os.numero}*\n\n`;
-    mensagem += `*ARF Funilaria e Pintura*\n`;
+    mensagem += `*Oficina Mecânica*\n`;
     mensagem += `_Sistema de Gestão de OS_\n\n`;
     mensagem += `*Detalhes da Ordem de Serviço:*\n`;
     mensagem += `------------------------------------\n`;
@@ -1452,8 +1193,7 @@ function enviarEmail(numero) {
     mostrarAlerta('Email gerado! Verifique seu cliente de email.', 'success');
 }
 
-
-
+// ===== SEÇÃO FINANCEIRO =====
 
 // Variável global para o gráfico
 let ganhosChart = null;
@@ -1560,19 +1300,5 @@ function atualizarGraficoGanhos() {
 // Função para inicializar a seção financeiro
 function inicializarFinanceiro() {
     atualizarGraficoGanhos();
-}
-
-
-// Atualizar a função atualizarEstatisticas para também atualizar o gráfico
-const atualizarEstatisticasOriginal = atualizarEstatisticas;
-
-function atualizarEstatisticas() {
-    atualizarEstatisticasOriginal();
-    
-    // Se a seção financeiro estiver visível, atualizar o gráfico
-    const financeiroSection = document.getElementById('financeiro');
-    if (financeiroSection && financeiroSection.style.display !== 'none') {
-        atualizarGraficoGanhos();
-    }
 }
 
